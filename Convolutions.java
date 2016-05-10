@@ -1,6 +1,15 @@
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.imageio.ImageIO;
+import java.awt.image.DataBufferByte;
+import java.awt.image.WritableRaster;
 
 public class Convolutions
 {
@@ -48,9 +57,9 @@ public class Convolutions
     {
         int[][] croppedPicture = new int[picture.length / 2][picture[0].length / 2];
 
-        for(int row = 0; row < picture.length; row += stride)
+        for(int row = 0; row < picture.length - 1; row += stride)
         {
-            for(int column = 0; column < picture[0].length; column += stride)
+            for(int column = 0; column < picture[0].length - 1; column += stride)
             {
                 int croppedRow = row / stride;
                 int croppedColumn = column / stride;
@@ -63,8 +72,9 @@ public class Convolutions
         return croppedPicture;
     }
 
-    public static void main(String args[])
+    public static void main(String args[]) throws IOException
     {
+
         int[][] picture = {
             {2, 3, 5, 1, 7, 5},
             {2, 3, 5, 2, 8, 4},
