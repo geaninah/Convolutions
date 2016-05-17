@@ -1,34 +1,54 @@
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import javax.imageio.ImageIO;
-import java.awt.image.DataBufferByte;
-import java.awt.image.WritableRaster;
 
 public class Convolutions
 {
-    // Get the last element of a list
-    private static int maxFilter(int[][] picture, int row, int column)
+    static final double[][] innerOutline = new double[][] {
+        { -1, -1, -1 },
+        { -1, 8, -1 },
+        { -1, -1, -1 }
+    };
+
+    static final double[][] outerOutline = new double[][] {
+        { 1, 1, 1 },
+        { 1, -8, 1 },
+        { 1, 1, 1 }
+    };
+
+    static final double[][] average = new double[][] {
+        { 1.0 / 9, 1.0 / 9, 1.0 / 9 },
+        { 1.0 / 9, 1.0 / 9, 1.0 / 9 },
+        { 1.0 / 9, 1.0 / 9, 1.0 / 9 }
+    };
+
+    static final double[][] keepMiddle = new double[][] {
+        { 0, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 0 }
+    };
+
+    // Put the elements of the matrix in a list
+    static List<Integer> toList(int[][] picture, int startY, int startX, int endY, int endX)
     {
-        List<Integer> list = toArray(picture, row, column);
+        List<Integer> list = new ArrayList<Integer>();
         
-        Collections.sort(list);
+        for(int y = startY; y < endY; y++)
+        {
+            for(int x = startX; x < endX; x++)
+            {
+                list.add(picture[y][x]);
+            }
+        }
 
-        int max = list.get(list.size() - 1);
-
-        return max;
+        return list;
     }
 
-    // Get the median element of a list
-    private static int medianFilter(int[][] picture, int row, int column)
+    // Get the median element of the region
+    static int medianFilter(int[][] picture, int startY, int startX, int endY, int endX)
     {
-        List<Integer> list = toArray(picture, row, column);
+        List<Integer> list = toList(picture, startY, startX, endY, endX);
         
         Collections.sort(list);
 
@@ -37,67 +57,90 @@ public class Convolutions
         return median;
     }
 
-    // Put the elements of the matrix in a list
-    private static List<Integer> toArray(int[][] picture, int row, int column)
+    // Get the greatest element of the region
+    static int maxFilter(int[][] picture, int startY, int startX, int endY, int endX)
     {
-        List<Integer> list = new ArrayList<Integer>();
-        
-        for(int index1 = row; index1 < row + 2; index1++)
+        int max = 0;
+
+        for(int y = startY; y < endY; ++y)
         {
-            for(int index2 = column; index2 < column + 2; index2++)
+            for(int x = startX; x < endX; ++x)
             {
-                list.add(picture[index1][index2]);
+                if(picture[y][x] > max)
+                {
+                    max = picture[y][x];
+                }
             }
         }
 
-        return list;
+        return max;
     }
 
-    public static int[][] convolve(int[][] picture, int stride)
+    // Multiplies the region with the convolution
+    static int multiply(int[][] picture, int startY, int startX, int endY, int endX, double[][] convolution)
     {
-        int[][] croppedPicture = new int[picture.length / 2][picture[0].length / 2];
+        double result = 0;
 
-        for(int row = 0; row < picture.length - 1; row += stride)
+        for(int y = startY; y < endY; y++)
         {
-            for(int column = 0; column < picture[0].length - 1; column += stride)
+            for(int x = startX; x < endX; x++)
             {
-                int croppedRow = row / stride;
-                int croppedColumn = column / stride;
-
-                // Replace 4 pixels with one
-                croppedPicture[croppedRow][croppedColumn] = medianFilter(picture, row, column);
+                result += convolution[y - startY][x - startX] * picture[y][x];
             }
         }
 
-        return croppedPicture;
+        if(result < 0)
+        {
+            return 0;
+        }
+        else if(result > 255)
+        {
+            return 255;
+        }
+
+        return (int)Math.round(result);
+    }
+
+    public static int[][] convolve(int[][] picture, int size, int stride)
+    {
+        int height = picture.length;
+        int width = picture[0].length;
+
+        int[][] convolvedPicture = new int[(height - size) / stride + 1][(width - size) / stride + 1];
+        int offset = size / 2;
+
+        for(int y = offset; y < height - offset; y += stride)
+        {
+            for(int x = offset; x < width - offset; x += stride)
+            {
+                int mappedY = (y - offset) / stride;
+                int mappedX = (x - offset) / stride;
+                
+                if(size % 2 == 0)
+                {
+                    convolvedPicture[mappedY][mappedX] = multiply(picture,
+                        y - offset, x - offset,
+                        y + offset, x + offset,
+                        innerOutline);
+                }
+                else
+                {
+                    convolvedPicture[mappedY][mappedX] = multiply(picture,
+                        y - offset, x - offset,
+                        y + offset + 1, x + offset + 1,
+                        innerOutline);
+                }
+            }
+        }
+
+        return convolvedPicture;
     }
 
     public static void main(String args[]) throws IOException
     {
+        int[][] image = GrayscaleImageIO.loadImage(args[0]);
+        int[][] modifiedImage = convolve(image, 3, 3);
 
-        int[][] picture = {
-            {2, 3, 5, 1, 7, 5},
-            {2, 3, 5, 2, 8, 4},
-            {9, 5, 4, 2, 1, 2},
-            {2, 5, 6, 2, 6, 9},
-            {1, 0, 5, 2, 8, 7},
-            {5, 2, 7, 9, 2, 0}
-        };
-
-        int[][] croppedPicture = convolve(picture, 2);
-
-        int height = croppedPicture.length;
-        int width = croppedPicture[0].length;
-
-        // Print the result
-        for(int row = 0; row < height; row++)
-        {
-            for(int column = 0; column < width; column++)
-            {
-                System.out.print(croppedPicture[row][column] + " ");
-            }
-
-            System.out.println();
-        }
+        GrayscaleImageIO.saveImage(modifiedImage, args[1]);
     }
 }
